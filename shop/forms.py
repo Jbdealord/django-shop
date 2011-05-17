@@ -11,10 +11,6 @@ class AddressForm(forms.ModelForm):
             'client':forms.HiddenInput(),
         }
 
-class BillingShippingForm(forms.Form):
-    shipping_method = forms.ChoiceField(choices=_get_shipping_backends())
-    payment_method = forms.ChoiceField(choices=_get_billing_backends())
-
 def _get_shipping_backends():
     shipping_backends = backends_pool.get_shipping_backends_list()
     return tuple([(x.url_namespace, x.backend_name) for x in shipping_backends])
@@ -23,3 +19,6 @@ def _get_billing_backends():
     billing_backends = backends_pool.get_payment_backends_list()
     return tuple([(x.url_namespace, x.backend_name) for x in billing_backends])
 
+class BillingShippingForm(forms.Form):
+    shipping_method = forms.ChoiceField(choices=_get_shipping_backends())
+    payment_method = forms.ChoiceField(choices=_get_billing_backends())
