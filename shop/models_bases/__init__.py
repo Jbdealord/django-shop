@@ -95,6 +95,7 @@ class BaseCart(models.Model):
         self.current_total = Decimal('0.0')  # used by cart modifiers
         self.extra_price_fields = []  # List of tuples (label, value)
         self._updated_cart_items = None
+        self._needs_another_update_run = False
 
     def add_product(self, product, quantity=1, merge=True, queryset=None):
         """
@@ -194,7 +195,21 @@ class BaseCart(models.Model):
         """
         This should be called whenever anything is changed in the cart (added
         or removed).
-        It will loop on all line items in the cart, and call all the price
+
+        Since cart modifiers can change the contents of the cart in-flight,
+        we loop until the cart was not added to or removed from. Having lots
+        of modifiers add items to the cart is quite costly in terms of
+        computation, You should try to have only one cart modifier adding
+        multiple items, ideally.
+        """
+        self._do_update(state)
+        while self._needs_another_update_run:
+            self._needs_another_update_run = False  # Prevents infinite loops
+            self._do_update(state)
+
+    def _do_update(self, state=None):
+        """
+        This will loop on all line items in the cart, and call all the price
         modifiers on each row.
         After doing this, it will compute and update the order's total and
         subtotal fields, along with any payment field added along the way by
@@ -205,6 +220,7 @@ class BaseCart(models.Model):
         that for the order items (since they are legally binding after the
         "purchase" button was pressed)
         """
+
         from shop.models import CartItem, Product
 
         # This is a ghetto "select_related" for polymorphic models.
@@ -251,7 +267,7 @@ class BaseCart(models.Model):
 
     def empty(self):
         """
-        Remove all cart items
+        Remove all cart items.
         """
         if self.pk:
             self.items.all().delete()
@@ -260,9 +276,17 @@ class BaseCart(models.Model):
     @property
     def total_quantity(self):
         """
-        Returns the total quantity of all items in the cart
+        Returns the total quantity of all items in the cart.
         """
         return sum([ci.quantity for ci in self.items.all()])
+
+    def needs_new_update(self, update=True):
+        """
+        Called from cart modifiers, this marks the Cart as needing another run
+        of update (for example, when a cart modifier adds a new item to the
+        cart).
+        """
+        self._needs_another_update_run = update
 
 
 class BaseCartItem(models.Model):
